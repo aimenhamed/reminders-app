@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 // const bodyParser = require("body-parser"); // depreciated
 const notifier = require("node-notifier");
@@ -17,6 +18,7 @@ const notify = ({title, message}, callback) => {
         {
             title: title || "No title given",
             message: message || "No message given",
+            icon: path.join(__dirname, 'a1.png'),
             sound: true,
             wait: true,
             reply: true,

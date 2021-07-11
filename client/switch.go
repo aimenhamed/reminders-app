@@ -4,8 +4,20 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
+
+type idsFlag []string
+
+func (list idsFlag) String() string {
+	return strings.Join(list, ",")
+}
+
+func (list *idsFlag) Set(v string) error {
+	*list = append(*list, v)
+	return nil
+}
 
 type BackendHTTPClient interface {
 	Create(title, message string, duration time.Duration) ([]byte, error)
@@ -78,28 +90,92 @@ func (s Switch) create() func(string) error {
 
 func (s Switch) edit() func(string) error {
 	return func(cmd string) error {
-		fmt.Println("edit reminder")
+		ids := idsFlag{}
+		editCmd := flag.NewFlagSet(cmd, flag.ExitOnError)
+		editCmd.Var(&ids, "id", "The ID (int) of the reminder to edit")
+		t, m, d := s.reminderFlags(editCmd)
+
+		if err := s.checkArgs(2); err != nil {
+			return err
+		}
+		if err := s.parseCmd(editCmd); err != nil {
+			return err
+		}
+
+		lastID := ids[len(ids)-1]
+
+		res, err := s.client.Edit(lastID, *t, *m, *d)
+
+		if err != nil {
+			return wrapError("Could not edit reminder", err)
+		}
+
+		fmt.Printf("Reminder edited successfully:\n%s", string(res))
 		return nil
 	}
 }
 
 func (s Switch) fetch() func(string) error {
 	return func(cmd string) error {
-		fmt.Println("fetch reminder")
+		ids := idsFlag{}
+		fetchCmd := flag.NewFlagSet(cmd, flag.ExitOnError)
+		fetchCmd.Var(&ids, "id", "List of reminder IDs (int) to fetch")
+
+		if err := s.checkArgs(1); err != nil {
+			return err
+		}
+		if err := s.parseCmd(fetchCmd); err != nil {
+			return err
+		}
+
+		res, err := s.client.Fetch(ids)
+
+		if err != nil {
+			return wrapError("Could not fetch reminders", err)
+		}
+
+		fmt.Printf("Reminders fetched successfully:\n%s", string(res))
 		return nil
 	}
 }
 
 func (s Switch) delete() func(string) error {
 	return func(cmd string) error {
-		fmt.Println("delete reminder")
+		ids := idsFlag{}
+		deleteCmd := flag.NewFlagSet(cmd, flag.ExitOnError)
+		deleteCmd.Var(&ids, "id", "List of reminder IDs (int) to delete")
+
+		if err := s.checkArgs(1); err != nil {
+			return err
+		}
+		if err := s.parseCmd(deleteCmd); err != nil {
+			return err
+		}
+
+		err := s.client.Delete(ids)
+
+		if err != nil {
+			return wrapError("Could not delete reminders", err)
+		}
+
+		fmt.Printf("Reminders deleted successfully:\n%v", ids)
 		return nil
 	}
 }
 
 func (s Switch) health() func(string) error {
 	return func(cmd string) error {
-		fmt.Println("calls health")
+		var host string
+		healthCmd := flag.NewFlagSet(cmd, flag.ExitOnError)
+		healthCmd.StringVar(&host, "host", s.backendAPIURL, "Host to ping for health")
+		if err := s.parseCmd(healthCmd); err != nil {
+			return err
+		}
+		if !s.client.Healthy(host) {
+			fmt.Printf("host %s is down\n", host)
+		} else {
+			fmt.Printf("host %s is running\n", host)
+		}
 		return nil
 	}
 }
